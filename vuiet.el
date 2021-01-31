@@ -4,6 +4,8 @@
 
 ;; Author: Mihai Olteanu <mihai_olteanu@fastmail.fm>
 ;; Version: 1.0
+;; Package-Version: 20200616.1136
+;; Package-Commit: 3dab1ea2253d5bc2974a1a064d2b1af3bd6b24f6
 ;; Package-Requires: ((emacs "26.1") (lastfm "1.1") (versuri "1.0") (s "1.12.0") (bind-key "2.4") (mpv "0.1.0"))
 ;; Keywords: multimedia
 ;; URL: https://github.com/mihaiolteanu/vuiet
@@ -89,6 +91,11 @@ value increases the chances you'll discover something totally new
 but it also increases the chances that you'll get wrongly
 scrobbled songs and youtube will find something totally unrelated
 as a result."
+  :type '(number :tag "count")
+  :group 'vuiet)
+
+(defcustom vuiet-artist-albums-limit 15
+  "Number of album for the given artist."
   :type '(number :tag "count")
   :group 'vuiet)
 
@@ -218,11 +225,14 @@ l   visit the artist's lastfm page."
            (songs (lastfm-artist-get-top-tracks
                    artist
                    :limit vuiet-artist-tracks-limit))
+	   (albums (lastfm-artist-get-top-albums
+		    artist
+		    :limit vuiet-artist-albums-limit))
            (bio-summary (car artist-info))
            ;; The subseq indices are based on the standard lastfm.el response
            ;; for artist.info
            (similar-artists (cl-subseq artist-info 3 7))
-           (tags (cl-subseq artist-info 8 12)))
+           (tags (cl-subseq artist-info 8)))
       (insert (format "* %s\n\n %s"
                       artist
                       (s-word-wrap 75 (replace-regexp-in-string
@@ -244,6 +254,14 @@ l   visit the artist's lastfm page."
                do (insert
                    (format "%2s. [[elisp:(vuiet-play '((\"%s\" \"%s\")))][%s]]\n"
                            i artist (cadr song) (cadr song))))
+
+      (insert "\n\n* Top Albums: \n")
+      (cl-loop for i from 1
+               for album in albums
+	       unless (string= (car album) "(null)")
+               do (insert
+                   (format "%2s. [[elisp:(vuiet-play-album \"%s\" \"%s\")][%s]]\n"
+                           i artist (car album) (car album))))
 
       (vuiet--local-set-keys
         ("p" . (vuiet-play songs))
@@ -349,9 +367,11 @@ l   save lyrics for this album."
   (vuiet--artist-from-minibuffer-if-nil artist)
   (unless album
     (ivy-read (format "%s Album:" artist)
-            (lastfm-artist-get-top-albums artist)
-            :action (lambda (a)
-                      (setf album (car a)))))
+              (lastfm-artist-get-top-albums
+	       artist
+	       :limit vuiet-artist-albums-limit)
+              :action (lambda (a)
+			(setf album (car a)))))
   (vuiet--with-vuiet-buffer (format "%s - %s" artist album)
     (let* ((songs (lastfm-album-get-info artist album))
            ;; Align song duration in one nice column. For this, I need to know
@@ -384,7 +404,9 @@ The album is displayed in a dedicated buffer.  See
 inside this buffer."
   (interactive "sArtist: ")
   (ivy-read "Select Album: "
-            (lastfm-artist-get-top-albums artist)
+            (lastfm-artist-get-top-albums
+	     artist
+	     :limit vuiet-artist-albums-limit)
             :action (lambda (album)
                       (vuiet-album-info artist (car album)))))
 
@@ -397,9 +419,9 @@ inside this buffer."
     (unless timer
       (when vuiet-update-mode-line-automatically
         (setf timer
-         (run-at-time vuiet-update-mode-line-interval
-                      vuiet-update-mode-line-interval
-                      #'vuiet-update-mode-line)))))
+              (run-at-time vuiet-update-mode-line-interval
+			   vuiet-update-mode-line-interval
+			   #'vuiet-update-mode-line)))))
 
   (defun vuiet--reset-update-mode-line-timer ()
     (when timer
@@ -431,17 +453,17 @@ inside this buffer."
   (let ((track (vuiet--playing-track)))
     (when track
       (setq-default mode-line-misc-info
-        (list (format "%s - %s [%s/%s] "
-                (vuiet-track-artist   track)
-                (vuiet-track-name     track)
-                (format-time-string "%M:%S"
-                 (or position
-                     ;; At startup, the running track may be set, by the
-                     ;; file might not be loaded yet.
-                     (condition-case nil
-                         (mpv-get-playback-position)
-                       (error 0))))
-                (vuiet-track-duration track))))))
+		    (list (format "%s - %s [%s/%s] "
+				  (vuiet-track-artist   track)
+				  (vuiet-track-name     track)
+				  (format-time-string "%M:%S"
+						      (or position
+							  ;; At startup, the running track may be set, by the
+							  ;; file might not be loaded yet.
+							  (condition-case nil
+							      (mpv-get-playback-position)
+							    (error 0))))
+				  (vuiet-track-duration track))))))
   (force-mode-line-update t))
 
 (defun vuiet-stop ()
@@ -473,7 +495,7 @@ inside this buffer."
   (interactive)
   (condition-case nil
       (mpv-run-command "playlist-next")
-    (error "No track available; Try again")))
+    (error (display-message-or-buffer "No track available; Try again"))))
 
 (defun vuiet-peek-next ()
   "Display the next track in the mode-line for a few seconds."
@@ -495,7 +517,7 @@ It only considers tracks from the current playlist."
   (interactive)
   (condition-case nil
       (mpv-run-command "playlist-prev")
-    (error "This is the first track")))
+    (error (display-message-or-buffer "This is the first track"))))
 
 (defun vuiet-replay ()
   "Play the currently playing track from the beginning."
@@ -560,7 +582,7 @@ It only considers tracks from the current playlist."
   (vuiet-play-pause)
   (when (vuiet-playing-artist)
     (browse-url
-     (concat "https://www.youtube.com/watch?v="
+     (concat "https://www.youtube.com/"
              (mpv-get-property "filename")
              "&t=" (int-to-string
                     (round (mpv-get-playback-position)))))))
@@ -779,10 +801,12 @@ minibuffer."
       (vuiet-play (lastfm-album-get-info artist album))
     (vuiet--artist-from-minibuffer-if-nil artist)
     (ivy-read (format "Play %s Album" artist)
-       (lastfm-artist-get-top-albums artist)
-       :action (lambda (album)
-                 (vuiet-play
-                  (lastfm-album-get-info artist (car album)))))))
+              (lastfm-artist-get-top-albums
+	       artist
+	       :limit vuiet-artist-albums-limit)
+	      :action (lambda (album)
+			(vuiet-play
+			 (lastfm-album-get-info artist (car album)))))))
 
 (iter-defun vuiet--artists-similar-tracks (artists)
   "Return a generator of tracks based on the given ARTISTS.
