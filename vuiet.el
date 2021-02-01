@@ -599,6 +599,14 @@ It only considers tracks from the current playlist."
              "&t=" (int-to-string
                     (round (mpv-get-playback-position)))))))
 
+(defun vuiet-playing-track-continue-with-mpv ()
+  "Pause vuiet and continue playing with mpv as a new process."
+  (interactive)
+  (vuiet-play-pause)
+  (when (vuiet-playing-artist)
+    (start-process "vuiet" nil "mpv"
+		   (vuiet--youtube-link-at-position))))
+
 (defun vuiet-artist-lastfm-page (artist)
   "Visit the ARTIST lastfm page."
   (interactive "sArtist: ")
