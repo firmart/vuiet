@@ -262,6 +262,13 @@ l   visit the artist's lastfm page."
                    (format "%2s. [[elisp:(vuiet-play-album \"%s\" \"%s\")][%s]]\n"
                            i artist (car album) (car album))))
 
+      (insert "\n\n* Top Albums: \n")
+      (cl-loop for i from 1
+               for album in albums
+               do (insert
+                   (format "%2s. [[elisp:(vuiet-play-album \"%s\" \"%s\")][%s]]\n"
+                           i artist (car album) (car album))))
+
       (vuiet--local-set-keys
         ("p" . (vuiet-play songs))
         ("s" . (vuiet-ivy-similar-artists artist))
