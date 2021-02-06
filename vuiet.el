@@ -257,6 +257,7 @@ l   visit the artist's lastfm page."
       (insert "\n\n* Top Albums: \n")
       (cl-loop for i from 1
                for a in albums
+	       unless (string= (car a) "(null)")
 	       as album = (s-replace-all '(("[" . "(") ("]" . ")")) (car a))
                do (insert
                    (format "%2s. [[elisp:(vuiet-play-album \"%s\" \"%s\")][%s]]\n"
