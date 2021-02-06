@@ -304,6 +304,7 @@ first and then display the info about it."
 
 (defun vuiet--ivy-play-song (songs)
   "Choose a song from SONGS with ivy and play it."
+  (setq songs (vuiet--check-playlist songs))
   (cl-multiple-value-bind (artist-max-len song-max-len)
       (cl-loop for entry in songs
                maximize (length (car entry)) into artist
@@ -588,16 +589,28 @@ It only considers tracks from the current playlist."
     (browse-url
      (format "https://www.youtube.com/results?search_query=%s" it))))
 
+(defun vuiet--youtube-link-at-position ()
+"Return youtube link of the current track at the playback position."
+  (concat "https://www.youtube.com/"
+  	  (mpv-get-property "filename")
+  	  "&t=" (int-to-string
+		 (round (mpv-get-playback-position)))))
+
 (defun vuiet-playing-track-continue-on-youtube ()
   "Pause vuiet and continue playing on youtube."
   (interactive)
   (vuiet-play-pause)
   (when (vuiet-playing-artist)
     (browse-url
-     (concat "https://www.youtube.com/"
-             (mpv-get-property "filename")
-             "&t=" (int-to-string
-                    (round (mpv-get-playback-position)))))))
+     (vuiet--youtube-link-at-position))))
+
+(defun vuiet-playing-track-continue-with-mpv ()
+  "Pause vuiet and continue playing with mpv as a new process."
+  (interactive)
+  (vuiet-play-pause)
+  (when (vuiet-playing-artist)
+    (start-process "vuiet" nil "mpv"
+		   (vuiet--youtube-link-at-position))))
 
 (defun vuiet-playing-track-continue-with-mpv ()
   "Pause vuiet and continue playing with mpv as a new process."
@@ -660,6 +673,28 @@ If no more objects available, return nil."
 ;;;:;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;                    Playlists
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(cl-deftype song () '(and (list-of string)
+			  (satisfies (lambda (l) (= (length l) 2)))))
+
+(cl-deftype playlist () '(list-of song))
+
+(defun vuiet--song-p (object)
+  "Return `t' if OBJECT is a song"
+  (cl-typep object 'song))
+
+(defun vuiet--playlist-p (object)
+  "Return `t' if OBJECT is a playlist"
+  (cl-typep object 'playlist))
+
+(defun vuiet--check-playlist (songs)
+  "Check whether SONGS is a playlist, and return it.
+If not, try to fix it or emit an error."
+  (pcase songs
+    ((pred vuiet--playlist-p) songs)
+    ((pred vuiet--song-p) (list songs))
+    (_ (error (display-message-or-buffer
+	       (format "Argument %s is not a playlist" songs))))))
 
 (iter-defun vuiet--make-generator (songs random)
   "Make a generator of VUIET-TRACK objects from the SONGS list.
