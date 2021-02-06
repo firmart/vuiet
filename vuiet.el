@@ -248,10 +248,11 @@ l   visit the artist's lastfm page."
       
       (insert "\n\n* Top Songs: \n")
       (cl-loop for i from 1
-               for song in songs
+               for track in songs
+	       as song = (s-replace-all '(("[" . "(") ("]" . ")")) (cadr track))
                do (insert
                    (format "%2s. [[elisp:(vuiet-play '((\"%s\" \"%s\")))][%s]]\n"
-                           i artist (cadr song) (cadr song))))
+                           i artist song song)))
 
       (insert "\n\n* Top Albums: \n")
       (cl-loop for i from 1
@@ -381,7 +382,7 @@ l   save lyrics for this album."
       (insert (format "* %s - %s \n\n" artist album))
       (cl-loop for i from 1
                for entry in songs
-               for song = (cadr entry)
+	       for song = (s-replace-all '(("[" . "(") ("]" . ")")) (cadr entry))
                for duration = (format-seconds
                                "%m:%02s" (string-to-number (caddr entry)))
                do (insert
@@ -524,30 +525,28 @@ It only considers tracks from the current playlist."
   (mpv-seek 1)
   (vuiet-update-mode-line))
 
-(cl-defun vuiet-seek-backward (&optional (seconds 5))
-  "Seek backward the given number of SECONDS."
-  (interactive)
-  (mpv-seek-backward seconds)
+(defun vuiet-seek-backward (&optional arg)
+  "Seek backward ARG seconds.  ARG defaults to 5."
+  (interactive "P")
+  (mpv-seek-backward (or arg 5))
   (vuiet-update-mode-line))
 
-(cl-defun vuiet-seek-forward (&optional (seconds 5))
-  "Seek forward the given number of SECONDS."
-  (interactive)
-  (mpv-seek-forward seconds)
+(defun vuiet-seek-forward (&optional arg)
+  "Seek forward ARG seconds.  ARG defaults to 5."
+  (interactive "P")
+  (mpv-seek-forward (or arg 5))
   (vuiet-update-mode-line))
 
-(defun vuiet-seek-backward-rate (arg)
-  "Seek backward ARG% of the track.  ARG defaults to 10%."
-  (interactive "p")
-  (mpv-seek-backward (round (* (if current-prefix-arg arg 10)
-			       (/ (mpv-get-duration) 100))))
+(defun vuiet-seek-backward-rate (&optional arg)
+  "Seek backward ARG percents of the track.  ARG defaults to 10."
+  (interactive "P")
+  (mpv-run-command "seek" (- (or arg 10)) "relative-percent")
   (vuiet-update-mode-line))
 
-(defun vuiet-seek-forward-rate (arg)
-  "Seek forward ARG% of the track.  ARG defaults to 10%."
-  (interactive "p")
-  (mpv-seek-forward (round (* (if current-prefix-arg arg 10)
-			      (/ (mpv-get-duration) 100))))
+(defun vuiet-seek-forward-rate (&optional arg)
+  "Seek forward ARG percents of the track.  ARG defaults to 10."
+  (interactive "P")
+  (mpv-run-command "seek" (or arg 10) "relative-percent")
   (vuiet-update-mode-line))
 
 (defun vuiet-play-pause ()
@@ -560,19 +559,19 @@ It only considers tracks from the current playlist."
   "Get the music player volume, between 0% and 100%."
   (mpv-get-property "volume"))
 
-(cl-defun vuiet-player-volume-inc (&key (step 1))
-  "Increase the music player volume by STEP percent."
-  (interactive)
+(defun vuiet-player-volume-inc (&optional arg)
+  "Increase the music player volume by ARG percent.  ARG defaults to 10."
+  (interactive "P")
   (let* ((volume (vuiet-player-volume))
-         (new-volume (+ volume step)))
+	 (new-volume (+ volume (or arg 10))))
     (when (<= new-volume 100)
       (mpv-set-property "volume" new-volume))))
 
-(cl-defun vuiet-player-volume-dec (&key (step 1))
-  "Decrease the mpv player volume by STEP percent."
-  (interactive)
+(defun vuiet-player-volume-dec (&optional arg)
+  "Decrease the mpv player volume by ARG percent.  ARG defaults to 10."
+  (interactive "P")
   (let* ((volume (vuiet-player-volume))
-         (new-volume (- volume step)))
+	 (new-volume (- volume (or arg 10))))
     (when (>= new-volume 0)
       (mpv-set-property "volume" new-volume))))
 
